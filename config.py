@@ -34,6 +34,15 @@ def _get_bool(name: str, default: bool = False) -> bool:
     return raw in {"1", "true", "yes", "on"}
 
 
+def _require_url(name: str) -> str:
+    value = _require(name)
+    if not value.startswith(("http://", "https://")):
+        raise RuntimeError(
+            f"{name} must start with http:// or https:// (got {value!r})"
+        )
+    return value
+
+
 class Settings:
     """Bridge configuration."""
 
@@ -52,6 +61,11 @@ class Settings:
         self.port: int = _get_int("PORT", 8787)
         self.agent_use_wsl: bool = _get_bool("AGENT_USE_WSL", False)
         self.wsl_distro: str = os.getenv("WSL_DISTRO", "Ubuntu").strip() or "Ubuntu"
+        self.n8n_callback_url: str = _require_url("N8N_CALLBACK_URL")
+        self.callback_timeout_sec: int = _get_int("CALLBACK_TIMEOUT_SEC", 30)
+        self.callback_summary_max_chars: int = _get_int(
+            "CALLBACK_SUMMARY_MAX_CHARS", 4000
+        )
 
     def _resolve_path(self, raw: str) -> Path:
         path = Path(raw)

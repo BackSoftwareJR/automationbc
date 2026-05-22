@@ -110,16 +110,39 @@ def log_auth_failure(reason: str, client_ip: str, path: str) -> None:
 
 
 def log_payload(
+    task_id: str | int,
+    project_id: str | int,
     project_area: str,
-    task_description: str,
+    dedicated_prompt: str,
     context: dict | None,
 ) -> None:
     context_keys = list(context.keys()) if context else []
     bridge_logger.info(
-        "Payload validated | project_area=%s task_length=%s context_keys=%s",
+        "Payload validated | task_id=%s project_id=%s project_area=%s "
+        "prompt_length=%s context_keys=%s",
+        task_id,
+        project_id,
         project_area,
-        len(task_description),
+        len(dedicated_prompt),
         context_keys,
+    )
+
+
+def log_callback_sent(task_id: str | int, status: str, http_status: int) -> None:
+    bridge_logger.info(
+        "Callback sent | task_id=%s status=%s http_status=%s",
+        task_id,
+        status,
+        http_status,
+    )
+
+
+def log_callback_failed(task_id: str | int, exc: BaseException) -> None:
+    bridge_logger.error(
+        "Callback failed | task_id=%s error=%s",
+        task_id,
+        exc,
+        exc_info=True,
     )
 
 

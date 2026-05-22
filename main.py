@@ -5,7 +5,7 @@ from __future__ import annotations
 import time
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
@@ -19,7 +19,7 @@ from logger_config import (
     log_request_completed,
     setup_logger,
 )
-from models import ErrorResponse, ExecuteAgentResponse, N8NPayload
+from models import AcceptedResponse, ErrorResponse, N8NPayload
 from security import verify_api_key
 
 settings = get_settings()
@@ -28,7 +28,7 @@ setup_logger(settings.log_level)
 app = FastAPI(
     title="n8n-Cursor Bridge",
     description="Local middleware between n8n webhooks and Cursor CLI agents",
-    version="1.0.0",
+    version="2.0.0",
 )
 
 runner = CursorAgentRunner(settings)
@@ -41,6 +41,13 @@ def _client_ip(request: Request) -> str:
     if request.client:
         return request.client.host
     return "unknown"
+
+
+def _run_agent_background(payload: N8NPayload) -> None:
+    try:
+        runner.run(payload)
+    except Exception as exc:
+        log_exception("Background agent run failed", exc)
 
 
 @app.middleware("http")
@@ -95,32 +102,25 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
-@app.post("/api/v1/execute-agent", response_model=ExecuteAgentResponse)
+@app.post(
+    "/api/v1/execute-agent",
+    status_code=202,
+    response_model=AcceptedResponse,
+)
 async def execute_agent(
     payload: N8NPayload,
+    background_tasks: BackgroundTasks,
     _api_key: Annotated[str, Depends(verify_api_key)],
-) -> ExecuteAgentResponse:
+) -> AcceptedResponse:
     log_payload(
+        payload.task_id,
+        payload.project_id,
         payload.project_area,
-        payload.task_description,
+        payload.dedicated_prompt,
         payload.context,
     )
-
-    try:
-        result = runner.run(payload)
-    except FileNotFoundError as exc:
-        log_exception("Workspace or agent binary error", exc)
-        return ExecuteAgentResponse(
-            success=False,
-            project_area=payload.project_area,
-            command=[],
-            stdout="",
-            stderr=str(exc),
-            exit_code=-1,
-            duration_ms=0.0,
-        )
-
-    return result
+    background_tasks.add_task(_run_agent_background, payload)
+    return AcceptedResponse(task_id=payload.task_id)
 
 
 if __name__ == "__main__":
