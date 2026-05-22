@@ -1,0 +1,16 @@
+venv/
+.env
+.env.local
+.env.*.local
+bridge_activity.log
+*.log
+.ngrok/
+ngrok.yml
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
