@@ -44,3 +44,31 @@ async def verify_api_key(
         )
 
     return x_api_key
+
+
+def is_localhost_client(request: Request) -> bool:
+    """Return True if request originates from loopback."""
+    client = request.client
+    if not client:
+        return False
+    host = client.host
+    return host in {"127.0.0.1", "::1", "localhost"}
+
+
+async def verify_dashboard_localhost(request: Request) -> None:
+    """Ensure dashboard UI is only served from loopback unless remote allowed."""
+    settings = get_settings()
+    if not settings.dashboard_allow_remote and not is_localhost_client(request):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Dashboard is only available from localhost",
+        )
+
+
+async def verify_dashboard_access(
+    request: Request,
+    x_api_key: Annotated[str | None, Header(alias="X-API-Key")] = None,
+) -> str:
+    """Validate dashboard API access: API key + localhost unless remote allowed."""
+    await verify_dashboard_localhost(request)
+    return await verify_api_key(request, x_api_key)

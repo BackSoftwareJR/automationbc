@@ -4,6 +4,8 @@ Local FastAPI middleware that receives webhooks from **n8n**, runs **Cursor CLI*
 
 ## Quick start (Windows)
 
+Vedi guida completa: **[AVVIO_RAPIDO.md](AVVIO_RAPIDO.md)**
+
 ```powershell
 .\setup.bat
 copy .env.example .env   # set BRIDGE_API_KEY and N8N_CALLBACK_URL
@@ -36,6 +38,7 @@ uvicorn main:app --host 0.0.0.0 --port 8787
   "task_id": "task-42",
   "project_id": 101,
   "project_area": "bs-webdev",
+  "target_branch": "staging",
   "context": { "source": "n8n" }
 }
 ```
@@ -46,6 +49,7 @@ uvicorn main:app --host 0.0.0.0 --port 8787
 | `task_id` | Yes | string or int |
 | `project_id` | Yes | string or int |
 | `project_area` | No | Default `bs-webdev` (workspace mapping) |
+| `target_branch` | No | Optional hint (ignored for git). **Auto:** static HTML → `staging` only (never `main`); Node.js → `main` only. HTML repos must have a `staging` branch on GitHub |
 | `context` | No | Optional metadata dict |
 
 ### Immediate response (202 Accepted)
@@ -72,7 +76,10 @@ After the agent completes (success, error, or timeout), the bridge POSTs:
 }
 ```
 
-`status` is `"success"` or `"error"`.
+`status` is `"success"`, `"error"`, or **`"progress"`** (intermediate check-in while the agent still runs).
+
+Progress payloads also include `run_id`, `attempt`, `elapsed_sec`, `silence_sec`, and `phase` (`"started"` | `"heartbeat"`).  
+In n8n, branch on `status`: ignore or log `progress`, wait for final `success` / `error`.
 
 ## Configuration
 
@@ -84,6 +91,9 @@ Copy `.env.example` to `.env`. Never commit `.env`.
 | `N8N_CALLBACK_URL` | Required. n8n webhook for results |
 | `CALLBACK_TIMEOUT_SEC` | HTTP timeout for callback (default 30) |
 | `CALLBACK_SUMMARY_MAX_CHARS` | Max summary length (default 4000) |
+| `AGENT_TIMEOUT_SEC` | Kill agent after N seconds (0 = disabled, default) |
+| `AGENT_PROGRESS_CALLBACK_SEC` | POST `status=progress` every N seconds (default 120, 0=off) |
+| `TASK_MAX_RUNTIME_SEC` | Watchdog hard cap in seconds (0 = disabled, default) |
 | `WORKSPACE_BS_WEBDEV` | Path for `project_area` mapping |
 | `AGENT_USE_WSL` | `true` on Windows to run `agent` inside WSL |
 | `CURSOR_API_KEY` | Optional Cursor CLI auth |
@@ -100,7 +110,7 @@ Header: X-API-Key: <BRIDGE_API_KEY>
 ## n8n workflow pattern
 
 1. **HTTP Request** → bridge `/execute-agent` → expect **202**
-2. Separate **Webhook** node (or Wait) at `N8N_CALLBACK_URL` → receives final `status` + `summary`
+2. Separate **Webhook** node (or Wait) at `N8N_CALLBACK_URL` → receives `progress` pings during the run, then final `success` / `error`
 
 ## License
 

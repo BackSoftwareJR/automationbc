@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>backclub://agent-bridge</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="stylesheet" href="/dashboard/styles.css?v=8" />
+</head>
+<body>
+  <div class="crt-overlay" aria-hidden="true"></div>
+  <div class="scanlines" aria-hidden="true"></div>
+  <div class="ambient-glow ambient-glow-a" aria-hidden="true"></div>
+  <div class="ambient-glow ambient-glow-b" aria-hidden="true"></div>
+
+  <div id="login-screen" class="login-screen">
+    <div class="terminal-window login-window">
+      <div class="window-chrome">
+        <div class="traffic-lights">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <span class="window-title">backclub-agent — auth.session</span>
+      </div>
+      <div class="window-body login-body">
+        <pre id="boot-log" class="boot-log"></pre>
+        <div id="login-form" class="login-form hidden">
+          <p class="prompt-line"><span class="prompt-char">›</span> Inserisci Bridge API Key</p>
+          <div class="input-row">
+            <span class="input-prefix">X-API-Key:</span>
+            <input id="api-key-input" type="password" placeholder="••••••••••••••••" autocomplete="off" />
+          </div>
+          <button id="login-btn" class="btn btn-phosphor">[ CONNECT ]</button>
+          <p id="login-error" class="login-error hidden"></p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="app" class="app hidden">
+    <header class="top-bar">
+      <div class="top-bar-left">
+        <div class="logo-mark">
+          <span class="logo-core"></span>
+          <span class="logo-ring"></span>
+        </div>
+        <div>
+          <h1 class="brand-title">BACKCLUB<span class="brand-accent">://</span>AGENT</h1>
+          <p class="brand-sub">local command surface · cursor bridge v2.1</p>
+        </div>
+      </div>
+      <div class="top-bar-center">
+        <div id="ws-status" class="signal-badge offline">
+          <span class="signal-wave"></span>
+          <span id="ws-label">SYNC_OFFLINE</span>
+        </div>
+        <div class="clock-badge">
+          <span id="live-clock">--:--:--</span>
+        </div>
+      </div>
+      <div class="top-bar-right">
+        <button id="logout-btn" class="btn btn-ghost">disconnect</button>
+      </div>
+    </header>
+
+    <section class="stats-strip" id="stats-grid">
+      <div class="stat-tile" data-stat="total">
+        <span class="stat-key">TOTAL</span>
+        <span class="stat-val" id="stat-total">0</span>
+      </div>
+      <div class="stat-tile stat-running" data-stat="running">
+        <span class="stat-key">ACTIVE</span>
+        <span class="stat-val" id="stat-running">0</span>
+      </div>
+      <div class="stat-tile stat-success" data-stat="success">
+        <span class="stat-key">OK</span>
+        <span class="stat-val" id="stat-success">0</span>
+      </div>
+      <div class="stat-tile stat-error" data-stat="error">
+        <span class="stat-key">FAIL</span>
+        <span class="stat-val" id="stat-error">0</span>
+      </div>
+      <div class="stat-tile" data-stat="queue_waiting">
+        <span class="stat-key">WAIT</span>
+        <span class="stat-val" id="stat-queue-waiting">0</span>
+      </div>
+      <div class="stat-tile" data-stat="queued">
+        <span class="stat-key">READY</span>
+        <span class="stat-val" id="stat-queued">0</span>
+      </div>
+      <div class="stat-tile" data-stat="cancelled">
+        <span class="stat-key">HALT</span>
+        <span class="stat-val" id="stat-cancelled">0</span>
+      </div>
+    </section>
+
+    <section class="terminal-window panel-queues">
+      <div class="window-chrome">
+        <div class="traffic-lights">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green pulse-green"></span>
+        </div>
+        <span class="window-title">~/project_queues — code dedicate per progetto</span>
+        <span id="queues-summary" class="queues-summary">0 progetti · 0 in attesa</span>
+      </div>
+      <div class="window-body">
+        <div id="project-queues" class="project-queues-grid"></div>
+        <p id="no-queues" class="empty-state">
+          <span class="blink">_</span> nessuna coda attiva — le task sullo stesso project_id vengono eseguite una alla volta
+        </p>
+      </div>
+    </section>
+
+    <main class="workspace-grid">
+      <section class="terminal-window panel-active">
+        <div class="window-chrome">
+          <div class="traffic-lights">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green pulse-green"></span>
+          </div>
+          <span class="window-title">~/active_agents — live processes</span>
+        </div>
+        <div class="window-body">
+          <div id="active-runs" class="active-runs"></div>
+          <p id="no-active" class="empty-state">
+            <span class="blink">_</span> nessun agente in esecuzione — in attesa di webhook n8n
+          </p>
+        </div>
+      </section>
+
+      <section class="terminal-window panel-feed">
+        <div class="window-chrome">
+          <div class="traffic-lights">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+          </div>
+          <span class="window-title">~/task_feed — incoming payloads</span>
+          <div class="filters">
+            <select id="filter-status" class="filter-select">
+              <option value="">all.status</option>
+              <option value="queue_waiting">queue_waiting</option>
+              <option value="queued">queued</option>
+              <option value="running">running</option>
+              <option value="retrying">retrying</option>
+              <option value="success">success</option>
+              <option value="error">error</option>
+              <option value="cancelled">cancelled</option>
+            </select>
+            <input id="filter-project" class="filter-input" type="text" placeholder="filter:project_id" />
+          </div>
+        </div>
+        <div class="window-body window-body-scroll">
+          <div id="task-list" class="task-list"></div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="status-bar">
+      <span id="status-message">system ready — awaiting connection</span>
+      <span class="status-bar-hint">backclub-agent · localhost only</span>
+    </footer>
+  </div>
+
+  <aside id="drawer" class="drawer hidden">
+    <div class="drawer-inner terminal-window">
+      <div class="window-chrome">
+        <div class="traffic-lights">
+          <span class="dot red"></span>
+          <span class="dot yellow"></span>
+          <span class="dot green"></span>
+        </div>
+        <h2 id="drawer-title" class="window-title">task.inspect</h2>
+        <button id="drawer-close" class="btn-icon" aria-label="Chiudi">✕</button>
+      </div>
+      <div class="drawer-scroll">
+        <div class="drawer-meta" id="drawer-meta"></div>
+        <div class="drawer-actions" id="drawer-actions"></div>
+        <div class="log-header">// n8n.callback</div>
+        <div class="drawer-callback" id="drawer-callback"></div>
+        <div class="log-header">// stream.output</div>
+        <div class="log-terminal" id="drawer-logs"></div>
+        <div class="result-header">// result.summary</div>
+        <div class="drawer-result hidden" id="drawer-result"></div>
+      </div>
+    </div>
+  </aside>
+  <div id="drawer-backdrop" class="drawer-backdrop hidden"></div>
+
+  <script src="/dashboard/app.js?v=9"></script>
+</body>
+</html>
